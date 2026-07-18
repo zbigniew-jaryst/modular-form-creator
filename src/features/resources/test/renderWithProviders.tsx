@@ -4,6 +4,7 @@ import type { ReactElement, ReactNode } from 'react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { ThemeProvider } from 'styled-components'
 import { theme } from '../../../design-system/theme/theme'
+import { CompletedResourceDraftsProvider } from '../completed-edits/CompletedResourceDraftsProvider'
 import { BasicInfoPage } from '../pages/BasicInfoPage'
 import { ProjectDetailsPage } from '../pages/ProjectDetailsPage'
 import { ResourceDetailsPage } from '../pages/ResourceDetailsPage'
@@ -37,7 +38,9 @@ export function renderWithProviders(
     return (
       <ThemeProvider theme={theme}>
         <QueryClientProvider client={queryClient}>
-          <MemoryRouter initialEntries={[route]}>{children}</MemoryRouter>
+          <CompletedResourceDraftsProvider>
+            <MemoryRouter initialEntries={[route]}>{children}</MemoryRouter>
+          </CompletedResourceDraftsProvider>
         </QueryClientProvider>
       </ThemeProvider>
     )

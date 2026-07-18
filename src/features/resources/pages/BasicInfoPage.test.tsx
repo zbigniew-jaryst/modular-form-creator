@@ -148,7 +148,7 @@ describe('BasicInfoPage', () => {
     expect(screen.getByDisplayValue('A useful resource')).toBeInTheDocument()
   })
 
-  it('does not expose a Basic Info PATCH submit action for completed resources', async () => {
+  it('exposes local apply for completed resources without sending PATCH', async () => {
     const fetchMock = vi.mocked(fetch)
     fetchMock.mockResolvedValueOnce(
       jsonResponse(
@@ -163,6 +163,7 @@ describe('BasicInfoPage', () => {
     renderResourceApp('/resources/1/basic-info')
 
     expect(await screen.findByDisplayValue('Jane Owner')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Apply changes locally' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Save Basic Info' })).not.toBeInTheDocument()
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })

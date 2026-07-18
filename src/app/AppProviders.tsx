@@ -4,6 +4,7 @@ import { BrowserRouter } from 'react-router-dom'
 import { ThemeProvider } from 'styled-components'
 import { GlobalStyles } from '../design-system/theme/GlobalStyles'
 import { theme } from '../design-system/theme/theme'
+import { CompletedResourceDraftsProvider } from '../features/resources/completed-edits/CompletedResourceDraftsProvider'
 import { ApiError } from '../shared/api/ApiError'
 
 function shouldRetry(failureCount: number, error: Error): boolean {
@@ -34,7 +35,9 @@ export function AppProviders({ children }: AppProvidersProps) {
     <ThemeProvider theme={theme}>
       <GlobalStyles />
       <QueryClientProvider client={queryClient}>
-        <BrowserRouter>{children}</BrowserRouter>
+        <CompletedResourceDraftsProvider>
+          <BrowserRouter>{children}</BrowserRouter>
+        </CompletedResourceDraftsProvider>
       </QueryClientProvider>
     </ThemeProvider>
   )

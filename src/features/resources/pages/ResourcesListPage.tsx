@@ -14,6 +14,7 @@ import {
 } from '../components/ResourceList'
 import { ResourcesFilters } from '../components/ResourcesFilters'
 import { ResourcesPagination } from '../components/ResourcesPagination'
+import { StatusLiveRegion } from '../components/StatusLiveRegion'
 import {
   getDefaultResourceListSearchState,
   parseResourceListSearchParams,
@@ -135,9 +136,7 @@ export function ResourcesListPage() {
         hasActiveFilters={hasActiveFilters}
       />
 
-      <StatusRegion aria-live="polite">
-        {statusMessage ? <StatusMessage>{statusMessage}</StatusMessage> : null}
-      </StatusRegion>
+      <StatusLiveRegion message={statusMessage} />
 
       {resourcesQuery.isPending && !resourcesQuery.data ? <ResourceListLoading /> : null}
 
@@ -222,16 +221,4 @@ const Title = styled.h1`
 const Description = styled.p`
   margin: 0;
   color: ${({ theme }) => theme.colors.inkMuted};
-`
-
-const StatusRegion = styled.div`
-  min-height: 0;
-`
-
-const StatusMessage = styled.p`
-  margin: 0;
-  padding: ${({ theme }) => `${theme.spacing.sm} ${theme.spacing.md}`};
-  border-radius: ${({ theme }) => theme.radii.md};
-  background: ${({ theme }) => theme.colors.accentSoft};
-  color: ${({ theme }) => theme.colors.inkStrong};
 `

@@ -102,7 +102,7 @@ describe('ProjectDetailsPage', () => {
     expect(screen.getByText('2 of 2 modules completed')).toBeInTheDocument()
   })
 
-  it('does not expose a Project Details PATCH submit action for completed resources', async () => {
+  it('exposes local apply for completed resources without sending PATCH', async () => {
     const fetchMock = vi.mocked(fetch)
     fetchMock.mockResolvedValueOnce(
       jsonResponse(
@@ -117,6 +117,9 @@ describe('ProjectDetailsPage', () => {
     renderResourceApp('/resources/1/project-details')
 
     expect(await screen.findByDisplayValue('Alpha Project')).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Apply changes locally' }),
+    ).toBeInTheDocument()
     expect(
       screen.queryByRole('button', { name: 'Save Project Details' }),
     ).not.toBeInTheDocument()

@@ -83,7 +83,7 @@ describe('ResourceOverviewPage', () => {
     ).toHaveAttribute('href', '/resources/1/project-details')
   })
 
-  it('exposes only read-only review actions for a completed resource', async () => {
+  it('exposes edit module actions for a completed resource without pending changes', async () => {
     const fetchMock = vi.mocked(fetch)
     fetchMock.mockResolvedValueOnce(
       jsonResponse(
@@ -97,11 +97,12 @@ describe('ResourceOverviewPage', () => {
 
     renderResourceApp('/resources/1')
 
-    const reviewLinks = await screen.findAllByRole('link', { name: 'Review module' })
-    expect(reviewLinks).toHaveLength(2)
+    const editLinks = await screen.findAllByRole('link', { name: 'Edit module' })
+    expect(editLinks).toHaveLength(2)
     expect(screen.queryByRole('button', { name: /provision/i })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Complete module' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: 'Edit module' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Review module' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Review changes' })).not.toBeInTheDocument()
   })
 
   it('does not invent progress from completed status alone', async () => {

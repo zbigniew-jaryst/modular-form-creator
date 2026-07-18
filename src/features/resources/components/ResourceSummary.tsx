@@ -1,6 +1,11 @@
 import styled from 'styled-components'
 import { Badge, Card } from '../../../design-system'
-import type { Resource } from '../model/resource.types'
+import type { ChangedModule } from '../completed-edits/completedResourceDraft.types'
+import type { EditableCompletedBasicInfo } from '../completed-edits/completedResourceDraft.types'
+import type {
+  ProjectDetailsUpdatePayload,
+  Resource,
+} from '../model/resource.types'
 import {
   displayCategory,
   displayDate,
@@ -13,12 +18,37 @@ import { getResourceProgress } from '../model/resourceProgress'
 import { ResourceStatusBadge } from './ResourceStatusBadge'
 
 type ResourceSummaryProps = {
-  resource: Resource
+  serverResource: Resource
+  effectiveBasicInfo?: EditableCompletedBasicInfo
+  effectiveProjectDetails?: ProjectDetailsUpdatePayload
+  changedModules?: ChangedModule[]
+  showUnsavedLabels?: boolean
 }
 
-export function ResourceSummary({ resource }: ResourceSummaryProps) {
-  const progress = getResourceProgress(resource)
-  const teamOptions = displayOptions(resource.projectDetails.options)
+export function ResourceSummary({
+  serverResource,
+  effectiveBasicInfo,
+  effectiveProjectDetails,
+  changedModules = [],
+  showUnsavedLabels = false,
+}: ResourceSummaryProps) {
+  const progress = getResourceProgress(serverResource)
+  const basicInfo = effectiveBasicInfo ?? {
+    owner: serverResource.basicInfo.owner,
+    email: serverResource.basicInfo.email,
+    description: serverResource.basicInfo.description,
+    priority: serverResource.basicInfo.priority as EditableCompletedBasicInfo['priority'],
+  }
+  const projectDetails = effectiveProjectDetails ?? {
+    projectName: serverResource.projectDetails.projectName,
+    budget: serverResource.projectDetails.budget,
+    category: serverResource.projectDetails
+      .category as ProjectDetailsUpdatePayload['category'],
+    options: serverResource.projectDetails.options as ProjectDetailsUpdatePayload['options'],
+  }
+  const teamOptions = displayOptions(projectDetails.options)
+  const basicInfoChanged = changedModules.includes('basic-info')
+  const projectDetailsChanged = changedModules.includes('project-details')
 
   return (
     <Summary>
@@ -28,25 +58,25 @@ export function ResourceSummary({ resource }: ResourceSummaryProps) {
           <DefinitionList>
             <DefinitionItem>
               <dt>Name</dt>
-              <dd>{displayValue(resource.name)}</dd>
+              <dd>{displayValue(serverResource.name)}</dd>
             </DefinitionItem>
             <DefinitionItem>
               <dt>Resource ID</dt>
-              <dd>{resource.resourceId}</dd>
+              <dd>{serverResource.resourceId}</dd>
             </DefinitionItem>
             <DefinitionItem>
               <dt>Status</dt>
               <dd>
-                <ResourceStatusBadge status={resource.status} />
+                <ResourceStatusBadge status={serverResource.status} />
               </dd>
             </DefinitionItem>
             <DefinitionItem>
               <dt>Created</dt>
-              <dd>{displayDate(resource.createdAt)}</dd>
+              <dd>{displayDate(serverResource.createdAt)}</dd>
             </DefinitionItem>
             <DefinitionItem>
               <dt>Last updated</dt>
-              <dd>{displayDate(resource.updatedAt)}</dd>
+              <dd>{displayDate(serverResource.updatedAt)}</dd>
             </DefinitionItem>
           </DefinitionList>
         </Section>
@@ -56,26 +86,31 @@ export function ResourceSummary({ resource }: ResourceSummaryProps) {
         <Section>
           <SectionHeader>
             <SectionHeading>Basic Info</SectionHeading>
-            <Badge variant={progress.basicInfoComplete ? 'success' : 'warning'}>
-              {progress.basicInfoComplete ? 'Complete' : 'Incomplete'}
-            </Badge>
+            <BadgeRow>
+              <Badge variant={progress.basicInfoComplete ? 'success' : 'warning'}>
+                {progress.basicInfoComplete ? 'Complete' : 'Incomplete'}
+              </Badge>
+              {showUnsavedLabels && basicInfoChanged ? (
+                <Badge variant="warning">Unsaved</Badge>
+              ) : null}
+            </BadgeRow>
           </SectionHeader>
           <DefinitionList>
             <DefinitionItem>
               <dt>Owner</dt>
-              <dd>{displayValue(resource.basicInfo.owner)}</dd>
+              <dd>{displayValue(basicInfo.owner)}</dd>
             </DefinitionItem>
             <DefinitionItem>
               <dt>Email</dt>
-              <dd>{displayValue(resource.basicInfo.email)}</dd>
+              <dd>{displayValue(basicInfo.email)}</dd>
             </DefinitionItem>
             <DefinitionItem>
               <dt>Description</dt>
-              <dd>{displayValue(resource.basicInfo.description)}</dd>
+              <dd>{displayValue(basicInfo.description)}</dd>
             </DefinitionItem>
             <DefinitionItem>
               <dt>Priority</dt>
-              <dd>{displayPriority(resource.basicInfo.priority)}</dd>
+              <dd>{displayPriority(basicInfo.priority)}</dd>
             </DefinitionItem>
           </DefinitionList>
         </Section>
@@ -85,22 +120,27 @@ export function ResourceSummary({ resource }: ResourceSummaryProps) {
         <Section>
           <SectionHeader>
             <SectionHeading>Project Details</SectionHeading>
-            <Badge variant={progress.projectDetailsComplete ? 'success' : 'warning'}>
-              {progress.projectDetailsComplete ? 'Complete' : 'Incomplete'}
-            </Badge>
+            <BadgeRow>
+              <Badge variant={progress.projectDetailsComplete ? 'success' : 'warning'}>
+                {progress.projectDetailsComplete ? 'Complete' : 'Incomplete'}
+              </Badge>
+              {showUnsavedLabels && projectDetailsChanged ? (
+                <Badge variant="warning">Unsaved</Badge>
+              ) : null}
+            </BadgeRow>
           </SectionHeader>
           <DefinitionList>
             <DefinitionItem>
               <dt>Project name</dt>
-              <dd>{displayValue(resource.projectDetails.projectName)}</dd>
+              <dd>{displayValue(projectDetails.projectName)}</dd>
             </DefinitionItem>
             <DefinitionItem>
               <dt>Budget</dt>
-              <dd>{displayValue(resource.projectDetails.budget)}</dd>
+              <dd>{displayValue(projectDetails.budget)}</dd>
             </DefinitionItem>
             <DefinitionItem>
               <dt>Category</dt>
-              <dd>{displayCategory(resource.projectDetails.category)}</dd>
+              <dd>{displayCategory(projectDetails.category)}</dd>
             </DefinitionItem>
             <DefinitionItem>
               <dt>Team members</dt>
@@ -140,6 +180,12 @@ const SectionHeader = styled.div`
   align-items: center;
   justify-content: space-between;
   gap: ${({ theme }) => theme.spacing.sm};
+`
+
+const BadgeRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: ${({ theme }) => theme.spacing.xs};
 `
 
 const SectionHeading = styled.h2`

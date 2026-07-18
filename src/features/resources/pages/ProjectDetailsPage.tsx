@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import styled from 'styled-components'
 import { Button, Card } from '../../../design-system'
@@ -9,11 +9,12 @@ import {
   useUpdateProjectDetailsMutation,
 } from '../api/resourcesQueries'
 import { ProjectDetailsForm } from '../components/ProjectDetailsForm'
-import {
-  ResourcePageLoading,
-  ResourcePageState,
-} from '../components/ResourcePageState'
-import type { ModuleSaveNotice } from '../model/resourceNavigation'
+import { resolveResourceDetailLoad } from '../components/resolveResourceDetailLoad'
+import { useCompletedResourceDrafts } from '../completed-edits/CompletedResourceDraftsProvider'
+import { getEffectiveProjectDetails } from '../completed-edits/completedResourceDraft.helpers'
+import { useBeforeUnloadWarning } from '../completed-edits/useBeforeUnloadWarning'
+import { useReconcileCompletedDraft } from '../completed-edits/useReconcileCompletedDraft'
+import type { LocalApplyNotice, ModuleSaveNotice } from '../model/resourceNavigation'
 import { parseResourceIdentifier } from '../model/resourceIdentifier'
 import { isBasicInfoComplete } from '../model/resourceProgress'
 import type { ProjectCategory, TeamMemberOption } from '../model/resource.types'
@@ -24,58 +25,37 @@ export function ProjectDetailsPage() {
   const navigate = useNavigate()
   const resourceQuery = useResourceQuery(identifier)
   const updateMutation = useUpdateProjectDetailsMutation(identifier ?? '')
+  const drafts = useCompletedResourceDrafts()
   const [submitError, setSubmitError] = useState<string | undefined>()
+  const [isFormDirty, setIsFormDirty] = useState(false)
 
-  if (!identifier) {
-    return (
-      <ResourcePageState
-        title="Invalid resource"
-        description="The resource identifier in the URL is not valid. Use a positive numeric ID or a Mongo ObjectId."
-      />
-    )
+  const handleDirtyChange = useCallback((dirty: boolean) => {
+    setIsFormDirty(dirty)
+  }, [])
+
+  const serverResource = resourceQuery.data
+  const isCompleted = serverResource?.status === 'completed'
+  useBeforeUnloadWarning(
+    Boolean(isCompleted && isFormDirty && !drafts.hasAnyPendingChanges),
+  )
+  useReconcileCompletedDraft(serverResource)
+
+  const load = resolveResourceDetailLoad(identifier, resourceQuery)
+  if (load.kind === 'blocked') {
+    return load.node
   }
 
-  const resourceIdentifier = identifier
+  const { identifier: resourceIdentifier, serverResource: currentResource } = load
+  const completed = currentResource.status === 'completed'
+  const basicInfoComplete = isBasicInfoComplete(currentResource.basicInfo)
+  const isLocked = !completed && !basicInfoComplete
+  const resourceDraft = drafts.getDraft(currentResource.resourceId)
+  const effectiveProjectDetails = getEffectiveProjectDetails(
+    currentResource,
+    resourceDraft,
+  )
 
-  if (resourceQuery.isPending && !resourceQuery.data) {
-    return <ResourcePageLoading />
-  }
-
-  if (resourceQuery.isError) {
-    if (isApiError(resourceQuery.error) && resourceQuery.error.status === 404) {
-      return (
-        <ResourcePageState
-          title="Resource not found"
-          description="No resource exists for this identifier. It may have been deleted."
-        />
-      )
-    }
-
-    const message = isApiError(resourceQuery.error)
-      ? resourceQuery.error.message
-      : 'Something went wrong while loading this resource.'
-
-    return (
-      <ResourcePageState
-        title="Unable to load resource"
-        description={message}
-        onRetry={() => {
-          void resourceQuery.refetch()
-        }}
-      />
-    )
-  }
-
-  const resource = resourceQuery.data
-  if (!resource) {
-    return <ResourcePageLoading />
-  }
-
-  const isCompleted = resource.status === 'completed'
-  const basicInfoComplete = isBasicInfoComplete(resource.basicInfo)
-  const isLocked = !isCompleted && !basicInfoComplete
-
-  async function handleSubmit(values: {
+  async function handleDraftSubmit(values: {
     projectName: string
     budget: string
     category: ProjectCategory
@@ -98,14 +78,27 @@ export function ProjectDetailsPage() {
     }
   }
 
+  function handleCompletedApply(values: {
+    projectName: string
+    budget: string
+    category: ProjectCategory
+    options: TeamMemberOption[]
+  }) {
+    drafts.applyProjectDetails(currentResource, values)
+    const state: { localApply: LocalApplyNotice } = {
+      localApply: { module: 'project-details' },
+    }
+    navigate(paths.resourceDetails(resourceIdentifier), { replace: true, state })
+  }
+
   return (
     <Page>
       <Header>
         <BackLink to={paths.resource(resourceIdentifier)}>Back to resource</BackLink>
         <Title>Project Details</Title>
         <Description>
-          {isCompleted
-            ? 'This resource is completed. Module values are shown read-only and cannot be updated through this form.'
+          {completed
+            ? 'Edit Project Details locally. Changes stay in this browser session until you submit them from the Details page.'
             : isLocked
               ? 'Project Details stays locked until Basic Info is complete.'
               : 'Complete the Project Details module for this draft resource.'}
@@ -139,11 +132,14 @@ export function ProjectDetailsPage() {
       ) : (
         <Card variant="elevated">
           <ProjectDetailsForm
-            resource={resource}
-            readOnly={isCompleted}
-            isSubmitting={updateMutation.isPending}
+            resource={currentResource}
+            initialValues={completed ? effectiveProjectDetails : undefined}
+            isSubmitting={!completed && updateMutation.isPending}
+            submitLabel={completed ? 'Apply changes locally' : 'Save Project Details'}
+            submittingLabel={completed ? 'Applying…' : 'Saving…'}
             submitError={submitError}
-            onSubmit={isCompleted ? undefined : handleSubmit}
+            onDirtyChange={completed ? handleDirtyChange : undefined}
+            onSubmit={completed ? handleCompletedApply : handleDraftSubmit}
           />
         </Card>
       )}

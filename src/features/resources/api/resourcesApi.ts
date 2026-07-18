@@ -1,4 +1,5 @@
 import { apiClient } from '../../../shared/api/apiClient'
+import type { ReplaceCompletedResourcePayload } from '../completed-edits/completedResourceDraft.types'
 import type {
   BasicInfoUpdatePayload,
   CreateResourcePayload,
@@ -81,5 +82,15 @@ export function deleteResource(resourceId: number): Promise<Resource> {
 export function provisionResource(identifier: ResourceIdentifier): Promise<Resource> {
   return apiClient<Resource>(`${resourcePath(identifier)}/provisioning`, {
     method: 'PATCH',
+  })
+}
+
+export function replaceCompletedResource(
+  identifier: ResourceIdentifier,
+  payload: ReplaceCompletedResourcePayload,
+): Promise<Resource> {
+  return apiClient<Resource>(resourcePath(identifier), {
+    method: 'PUT',
+    body: payload,
   })
 }

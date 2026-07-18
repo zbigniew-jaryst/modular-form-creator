@@ -1,93 +1,125 @@
-import { Link, useParams } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
+import { useEffect, useState } from 'react'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import styled from 'styled-components'
-import { Badge, Card } from '../../../design-system'
-import { isApiError } from '../../../shared/api/ApiError'
+import { Badge, Button, Card } from '../../../design-system'
 import { paths } from '../../../shared/routing/paths'
+import { resourceKeys } from '../api/resourceKeys'
 import { useResourceQuery } from '../api/resourcesQueries'
-import {
-  ResourcePageLoading,
-  ResourcePageState,
-} from '../components/ResourcePageState'
+import { DiscardCompletedChangesDrawer } from '../components/DiscardCompletedChangesDrawer'
+import { resolveResourceDetailLoad } from '../components/resolveResourceDetailLoad'
 import { ResourceStatusBadge } from '../components/ResourceStatusBadge'
 import { ResourceSummary } from '../components/ResourceSummary'
+import { StatusLiveRegion } from '../components/StatusLiveRegion'
+import { SubmitCompletedChangesDrawer } from '../components/SubmitCompletedChangesDrawer'
+import { useCompletedResourceDrafts } from '../completed-edits/CompletedResourceDraftsProvider'
+import {
+  getChangedModules,
+  getEffectiveBasicInfo,
+  getEffectiveProjectDetails,
+  hasEffectivePendingChanges,
+} from '../completed-edits/completedResourceDraft.helpers'
+import { useReconcileCompletedDraft } from '../completed-edits/useReconcileCompletedDraft'
 import { parseResourceIdentifier } from '../model/resourceIdentifier'
+import {
+  getLocalApplySuccessMessage,
+  getPendingModuleBadgeLabel,
+  type LocalApplyNotice,
+} from '../model/resourceNavigation'
 import { getProvisioningEligibility } from '../model/resourceProvisioning'
 import { getResourceProgress } from '../model/resourceProgress'
 
 export function ResourceDetailsPage() {
   const { resourceId } = useParams()
   const identifier = parseResourceIdentifier(resourceId)
+  const location = useLocation()
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const resourceQuery = useResourceQuery(identifier)
+  const drafts = useCompletedResourceDrafts()
 
-  if (!identifier) {
-    return (
-      <ResourcePageState
-        title="Invalid resource"
-        description="The resource identifier in the URL is not valid. Use a positive numeric ID or a Mongo ObjectId."
-      />
-    )
-  }
+  const localApplyNotice = (
+    location.state as { localApply?: LocalApplyNotice } | null
+  )?.localApply
 
-  if (resourceQuery.isPending && !resourceQuery.data) {
-    return <ResourcePageLoading />
-  }
+  const [statusMessage, setStatusMessage] = useState(() =>
+    localApplyNotice ? getLocalApplySuccessMessage(localApplyNotice.module) : '',
+  )
+  const [isSubmitOpen, setIsSubmitOpen] = useState(false)
+  const [isDiscardOpen, setIsDiscardOpen] = useState(false)
 
-  if (resourceQuery.isError) {
-    if (isApiError(resourceQuery.error) && resourceQuery.error.status === 404) {
-      return (
-        <ResourcePageState
-          title="Resource not found"
-          description="No resource exists for this identifier. It may have been deleted."
-        />
-      )
+  useReconcileCompletedDraft(resourceQuery.data)
+
+  useEffect(() => {
+    if (!localApplyNotice || !identifier) {
+      return
     }
 
-    const message = isApiError(resourceQuery.error)
-      ? resourceQuery.error.message
-      : 'Something went wrong while loading this resource.'
+    navigate(paths.resourceDetails(identifier), { replace: true, state: null })
+  }, [localApplyNotice, identifier, navigate])
 
-    return (
-      <ResourcePageState
-        title="Unable to load resource"
-        description={message}
-        onRetry={() => {
-          void resourceQuery.refetch()
-        }}
-      />
-    )
+  const load = resolveResourceDetailLoad(identifier, resourceQuery)
+  if (load.kind === 'blocked') {
+    return load.node
   }
 
-  const resource = resourceQuery.data
-  if (!resource) {
-    return <ResourcePageLoading />
-  }
+  const { identifier: resourceIdentifier, serverResource } = load
+  const resourceDraft = drafts.getDraft(serverResource.resourceId)
+  const changedModules = getChangedModules(serverResource, resourceDraft)
+  const hasPending = hasEffectivePendingChanges(serverResource, resourceDraft)
+  const effectiveBasicInfo = getEffectiveBasicInfo(serverResource, resourceDraft)
+  const effectiveProjectDetails = getEffectiveProjectDetails(
+    serverResource,
+    resourceDraft,
+  )
 
-  const progress = getResourceProgress(resource)
-  const eligibility = getProvisioningEligibility(resource)
-  const isCompleted = resource.status === 'completed'
+  const progress = getResourceProgress(serverResource)
+  const eligibility = getProvisioningEligibility(serverResource)
+  const isCompleted = serverResource.status === 'completed'
   const isReadyDraft = eligibility.allowed
+
+  async function refetchResource() {
+    const result = await resourceQuery.refetch()
+    if (result.error) {
+      throw result.error
+    }
+    return result.data
+  }
 
   return (
     <Page>
       <Header>
         <NavRow>
-          <TextLink to={paths.resource(identifier)}>Back to resource</TextLink>
+          <TextLink to={paths.resource(resourceIdentifier)}>Back to resource</TextLink>
           <TextLink to={paths.resources}>Back to resources</TextLink>
         </NavRow>
         <Title>Resource details</Title>
         <MetaRow>
-          <ResourceName>{resource.name}</ResourceName>
-          <MetaItem>ID {resource.resourceId}</MetaItem>
-          <ResourceStatusBadge status={resource.status} />
+          <ResourceName>{serverResource.name}</ResourceName>
+          <MetaItem>ID {serverResource.resourceId}</MetaItem>
+          <ResourceStatusBadge status={serverResource.status} />
+          {isCompleted && hasPending ? (
+            <Badge variant="warning">Unsaved changes</Badge>
+          ) : null}
         </MetaRow>
         <ProgressText>
           {progress.completed} of {progress.total} modules completed
         </ProgressText>
       </Header>
 
-      {isCompleted ? (
+      <StatusLiveRegion message={statusMessage} />
+
+      {isCompleted && hasPending ? (
         <Notice role="status">
-          This resource is completed. Module information is shown in read-only mode.
+          You have unsaved changes stored only in this browser session. Review them below,
+          then submit or discard from this page.
+        </Notice>
+      ) : null}
+
+      {isCompleted && !hasPending ? (
+        <Notice role="status">
+          This resource is completed. You can edit modules locally and submit all changes
+          from this page.
         </Notice>
       ) : null}
 
@@ -105,7 +137,7 @@ export function ResourceDetailsPage() {
             <IncompleteList>
               {!progress.basicInfoComplete ? (
                 <li>
-                  <TextLink to={paths.resourceBasicInfo(identifier)}>
+                  <TextLink to={paths.resourceBasicInfo(resourceIdentifier)}>
                     Complete Basic Info
                   </TextLink>
                 </li>
@@ -113,7 +145,7 @@ export function ResourceDetailsPage() {
               {!progress.projectDetailsComplete ? (
                 <li>
                   {progress.basicInfoComplete ? (
-                    <TextLink to={paths.resourceProjectDetails(identifier)}>
+                    <TextLink to={paths.resourceProjectDetails(resourceIdentifier)}>
                       Complete Project Details
                     </TextLink>
                   ) : (
@@ -134,28 +166,104 @@ export function ResourceDetailsPage() {
           Project Details:{' '}
           {progress.projectDetailsComplete ? 'Complete' : 'Incomplete'}
         </Badge>
+        {isCompleted && hasPending
+          ? changedModules.map((module) => (
+              <Badge key={module} variant="warning">
+                {getPendingModuleBadgeLabel(module)}
+              </Badge>
+            ))
+          : null}
       </ModuleOverview>
 
-      <ResourceSummary resource={resource} />
+      <ResourceSummary
+        serverResource={serverResource}
+        effectiveBasicInfo={isCompleted ? effectiveBasicInfo : undefined}
+        effectiveProjectDetails={isCompleted ? effectiveProjectDetails : undefined}
+        changedModules={isCompleted ? changedModules : []}
+        showUnsavedLabels={isCompleted && hasPending}
+      />
 
       <Actions>
-        <ActionLink to={paths.resource(identifier)}>Back to resource overview</ActionLink>
+        <ActionLink to={paths.resource(resourceIdentifier)}>
+          Back to resource overview
+        </ActionLink>
         {isReadyDraft ? (
-          <ActionLink $primary to={paths.resource(identifier)}>
+          <ActionLink $primary to={paths.resource(resourceIdentifier)}>
             Go to overview to provision
           </ActionLink>
         ) : null}
         {isCompleted ? (
           <>
-            <ActionLink to={paths.resourceBasicInfo(identifier)}>
-              Review Basic Info
+            <ActionLink to={paths.resourceBasicInfo(resourceIdentifier)}>
+              Edit Basic Info
             </ActionLink>
-            <ActionLink to={paths.resourceProjectDetails(identifier)}>
-              Review Project Details
+            <ActionLink to={paths.resourceProjectDetails(resourceIdentifier)}>
+              Edit Project Details
             </ActionLink>
+            {hasPending ? (
+              <>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => {
+                    setIsDiscardOpen(true)
+                  }}
+                >
+                  Discard changes
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => {
+                    setIsSubmitOpen(true)
+                  }}
+                >
+                  Submit all changes
+                </Button>
+              </>
+            ) : null}
           </>
         ) : null}
       </Actions>
+
+      {isCompleted && hasPending ? (
+        <>
+          <SubmitCompletedChangesDrawer
+            serverResource={serverResource}
+            identifier={resourceIdentifier}
+            changedModules={changedModules}
+            isOpen={isSubmitOpen}
+            onClose={() => {
+              setIsSubmitOpen(false)
+            }}
+            onSubmitted={() => {
+              setStatusMessage('All changes submitted successfully.')
+            }}
+            onAlreadyCurrent={() => {
+              setStatusMessage(
+                'The resource already contains the reviewed values. No update was sent.',
+              )
+            }}
+            onResourceMissing={() => {
+              setIsSubmitOpen(false)
+              queryClient.removeQueries({
+                queryKey: resourceKeys.detail(resourceIdentifier),
+              })
+            }}
+            refetchResource={refetchResource}
+          />
+          <DiscardCompletedChangesDrawer
+            serverResource={serverResource}
+            isOpen={isDiscardOpen}
+            onClose={() => {
+              setIsDiscardOpen(false)
+            }}
+            onDiscard={() => {
+              drafts.clearDraft(serverResource.resourceId)
+              setStatusMessage('Local changes discarded. Showing server-backed values.')
+            }}
+          />
+        </>
+      ) : null}
     </Page>
   )
 }

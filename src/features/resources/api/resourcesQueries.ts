@@ -1,4 +1,5 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import type { ReplaceCompletedResourcePayload } from '../completed-edits/completedResourceDraft.types'
 import type {
   BasicInfoUpdatePayload,
   CreateResourcePayload,
@@ -13,6 +14,7 @@ import {
   getResource,
   listResources,
   provisionResource,
+  replaceCompletedResource,
   updateBasicInfo,
   updateProjectDetails,
 } from './resourcesApi'
@@ -86,6 +88,19 @@ export function useProvisionResourceMutation(identifier: ResourceIdentifier) {
 
   return useMutation({
     mutationFn: () => provisionResource(identifier),
+    onSuccess: async (resource) => {
+      queryClient.setQueryData(resourceKeys.detail(identifier), resource)
+      await queryClient.invalidateQueries({ queryKey: resourceKeys.lists() })
+    },
+  })
+}
+
+export function useReplaceCompletedResourceMutation(identifier: ResourceIdentifier) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (payload: ReplaceCompletedResourcePayload) =>
+      replaceCompletedResource(identifier, payload),
     onSuccess: async (resource) => {
       queryClient.setQueryData(resourceKeys.detail(identifier), resource)
       await queryClient.invalidateQueries({ queryKey: resourceKeys.lists() })

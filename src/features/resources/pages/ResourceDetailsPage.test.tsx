@@ -90,7 +90,7 @@ describe('ResourceDetailsPage', () => {
     ).toBeInTheDocument()
   })
 
-  it('shows completed status and read-only summary for a completed resource', async () => {
+  it('shows completed status and edit-oriented summary for a completed resource', async () => {
     const fetchMock = vi.mocked(fetch)
     fetchMock.mockResolvedValueOnce(
       jsonResponse(
@@ -107,9 +107,12 @@ describe('ResourceDetailsPage', () => {
     expect(await screen.findAllByText('Completed')).not.toHaveLength(0)
     expect(
       screen.getByText(
-        'This resource is completed. Module information is shown in read-only mode.',
+        'This resource is completed. You can edit modules locally and submit all changes from this page.',
       ),
     ).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Edit Basic Info' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Edit Project Details' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Submit all changes' })).not.toBeInTheDocument()
   })
 
   it('displays Basic Info and Project Details values with user-facing labels', async () => {

@@ -1,20 +1,26 @@
 import { useQueryClient } from '@tanstack/react-query'
-import { useState } from 'react'
-import { Link, useLocation, useParams } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import styled from 'styled-components'
-import { Button } from '../../../design-system'
-import { isApiError } from '../../../shared/api/ApiError'
+import { Badge, Button } from '../../../design-system'
 import { paths } from '../../../shared/routing/paths'
 import { resourceKeys } from '../api/resourceKeys'
 import { useResourceQuery } from '../api/resourcesQueries'
 import { ProvisionResourceDrawer } from '../components/ProvisionResourceDrawer'
+import { resolveResourceDetailLoad } from '../components/resolveResourceDetailLoad'
 import { ResourceHeader } from '../components/ResourceHeader'
 import { ResourceModuleCard } from '../components/ResourceModuleCard'
+import { StatusLiveRegion } from '../components/StatusLiveRegion'
+import { useCompletedResourceDrafts } from '../completed-edits/CompletedResourceDraftsProvider'
 import {
-  ResourcePageLoading,
-  ResourcePageState,
-} from '../components/ResourcePageState'
+  getChangedModules,
+  getEffectiveBasicInfo,
+  getEffectiveProjectDetails,
+  hasEffectivePendingChanges,
+} from '../completed-edits/completedResourceDraft.helpers'
+import { useReconcileCompletedDraft } from '../completed-edits/useReconcileCompletedDraft'
 import {
+  formatChangedModuleLabels,
   getModuleSaveSuccessMessage,
   type ModuleSaveNotice,
 } from '../model/resourceNavigation'
@@ -26,14 +32,12 @@ import {
 import { getResourceProgress } from '../model/resourceProgress'
 import type { Resource } from '../model/resource.types'
 
-function summarizeBasicInfo(resource: {
-  basicInfo: {
-    owner: string
-    email: string
-    priority: string
-  }
+function summarizeBasicInfo(basicInfo: {
+  owner: string
+  email: string
+  priority: string
 }): string {
-  const { owner, email, priority } = resource.basicInfo
+  const { owner, email, priority } = basicInfo
   if (!owner && !email && !priority) {
     return 'No Basic Info saved yet.'
   }
@@ -47,15 +51,13 @@ function summarizeBasicInfo(resource: {
   return parts.join(' · ')
 }
 
-function summarizeProjectDetails(resource: {
-  projectDetails: {
-    projectName: string
-    budget: string
-    category: string
-    options: string[]
-  }
+function summarizeProjectDetails(projectDetails: {
+  projectName: string
+  budget: string
+  category: string
+  options: string[]
 }): string {
-  const { projectName, budget, category, options } = resource.projectDetails
+  const { projectName, budget, category, options } = projectDetails
   if (!projectName && !budget && !category && options.length === 0) {
     return 'No Project Details saved yet.'
   }
@@ -74,72 +76,58 @@ export function ResourceOverviewPage() {
   const { resourceId } = useParams()
   const identifier = parseResourceIdentifier(resourceId)
   const location = useLocation()
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const resourceQuery = useResourceQuery(identifier)
+  const drafts = useCompletedResourceDrafts()
   const [isProvisionOpen, setIsProvisionOpen] = useState(false)
-  const [statusMessage, setStatusMessage] = useState('')
 
-  const notice = (location.state as { moduleSave?: ModuleSaveNotice } | null)?.moduleSave
-  const moduleSaveMessage = notice ? getModuleSaveSuccessMessage(notice.module) : ''
-  const liveMessage = statusMessage || moduleSaveMessage
+  const moduleSaveNotice = (
+    location.state as { moduleSave?: ModuleSaveNotice } | null
+  )?.moduleSave
 
-  if (!identifier) {
-    return (
-      <ResourcePageState
-        title="Invalid resource"
-        description="The resource identifier in the URL is not valid. Use a positive numeric ID or a Mongo ObjectId."
-      />
-    )
-  }
+  const [statusMessage, setStatusMessage] = useState(() =>
+    moduleSaveNotice ? getModuleSaveSuccessMessage(moduleSaveNotice.module) : '',
+  )
 
-  const resourceIdentifier = identifier
+  useReconcileCompletedDraft(resourceQuery.data)
 
-  if (resourceQuery.isPending && !resourceQuery.data) {
-    return <ResourcePageLoading />
-  }
-
-  if (resourceQuery.isError) {
-    if (isApiError(resourceQuery.error) && resourceQuery.error.status === 404) {
-      return (
-        <ResourcePageState
-          title="Resource not found"
-          description="No resource exists for this identifier. It may have been deleted."
-        />
-      )
+  useEffect(() => {
+    if (!moduleSaveNotice || !identifier) {
+      return
     }
 
-    const message = isApiError(resourceQuery.error)
-      ? resourceQuery.error.message
-      : 'Something went wrong while loading this resource.'
+    navigate(paths.resource(identifier), { replace: true, state: null })
+  }, [moduleSaveNotice, identifier, navigate])
 
-    return (
-      <ResourcePageState
-        title="Unable to load resource"
-        description={message}
-        onRetry={() => {
-          void resourceQuery.refetch()
-        }}
-      />
-    )
+  const load = resolveResourceDetailLoad(identifier, resourceQuery)
+  if (load.kind === 'blocked') {
+    return load.node
   }
 
-  const resource = resourceQuery.data
-  if (!resource) {
-    return <ResourcePageLoading />
-  }
+  const { identifier: resourceIdentifier, serverResource } = load
+  const resourceDraft = drafts.getDraft(serverResource.resourceId)
+  const changedModules = getChangedModules(serverResource, resourceDraft)
+  const hasPending =
+    serverResource.status === 'completed' &&
+    hasEffectivePendingChanges(serverResource, resourceDraft)
+  const effectiveBasicInfo = getEffectiveBasicInfo(serverResource, resourceDraft)
+  const effectiveProjectDetails = getEffectiveProjectDetails(
+    serverResource,
+    resourceDraft,
+  )
 
-  const progress = getResourceProgress(resource)
-  const isCompleted = resource.status === 'completed'
-  const eligibility = getProvisioningEligibility(resource)
+  const progress = getResourceProgress(serverResource)
+  const isCompleted = serverResource.status === 'completed'
+  const eligibility = getProvisioningEligibility(serverResource)
   const basicInfoActionLabel = isCompleted
-    ? 'Review module'
+    ? 'Edit module'
     : progress.basicInfoComplete
       ? 'Edit module'
       : 'Complete module'
-  const projectDetailsLocked =
-    !isCompleted && !progress.basicInfoComplete
+  const projectDetailsLocked = !isCompleted && !progress.basicInfoComplete
   const projectDetailsActionLabel = isCompleted
-    ? 'Review module'
+    ? 'Edit module'
     : progress.projectDetailsComplete
       ? 'Edit module'
       : 'Complete module'
@@ -166,17 +154,36 @@ export function ResourceOverviewPage() {
 
   return (
     <Page>
-      <ResourceHeader resource={resource} />
+      <ResourceHeader resource={serverResource} />
 
       <ActionsRow>
         <DetailsLink to={paths.resourceDetails(resourceIdentifier)}>
           View details
         </DetailsLink>
+        {hasPending ? (
+          <DetailsLink $primary to={paths.resourceDetails(resourceIdentifier)}>
+            Review changes
+          </DetailsLink>
+        ) : null}
       </ActionsRow>
 
-      <StatusRegion aria-live="polite">
-        {liveMessage ? <StatusMessage>{liveMessage}</StatusMessage> : null}
-      </StatusRegion>
+      <StatusLiveRegion message={statusMessage} />
+
+      {hasPending ? (
+        <PendingPanel role="status">
+          <PendingTitle>
+            <Badge variant="warning">Unsaved changes</Badge>
+          </PendingTitle>
+          <PendingCopy>
+            {changedModules.length} module
+            {changedModules.length === 1 ? '' : 's'} changed locally
+            {changedModules.length > 0
+              ? `: ${formatChangedModuleLabels(changedModules)}`
+              : ''}
+            . Review and submit from the Details page.
+          </PendingCopy>
+        </PendingPanel>
+      ) : null}
 
       {!isCompleted ? (
         <ProvisionPanel>
@@ -206,14 +213,18 @@ export function ResourceOverviewPage() {
       <Modules>
         <ResourceModuleCard
           title="Basic Info"
-          summary={summarizeBasicInfo(resource)}
+          summary={summarizeBasicInfo(
+            isCompleted ? effectiveBasicInfo : serverResource.basicInfo,
+          )}
           complete={progress.basicInfoComplete}
           actionLabel={basicInfoActionLabel}
           actionTo={paths.resourceBasicInfo(resourceIdentifier)}
         />
         <ResourceModuleCard
           title="Project Details"
-          summary={summarizeProjectDetails(resource)}
+          summary={summarizeProjectDetails(
+            isCompleted ? effectiveProjectDetails : serverResource.projectDetails,
+          )}
           complete={progress.projectDetailsComplete}
           actionLabel={projectDetailsLocked ? undefined : projectDetailsActionLabel}
           actionTo={
@@ -231,7 +242,7 @@ export function ResourceOverviewPage() {
 
       {isProvisionOpen ? (
         <ProvisionResourceDrawer
-          resource={resource}
+          resource={serverResource}
           identifier={resourceIdentifier}
           isOpen={isProvisionOpen}
           onClose={() => {
@@ -269,15 +280,19 @@ const ActionsRow = styled.div`
   gap: ${({ theme }) => theme.spacing.sm};
 `
 
-const DetailsLink = styled(Link)`
+const DetailsLink = styled(Link)<{ $primary?: boolean }>`
   display: inline-flex;
   align-items: center;
   justify-content: center;
   padding: ${({ theme }) => `${theme.spacing.sm} ${theme.spacing.md}`};
   border-radius: ${({ theme }) => theme.radii.pill};
-  border: 1px solid ${({ theme }) => theme.colors.border};
-  background: ${({ theme }) => theme.colors.surface};
-  color: ${({ theme }) => theme.colors.inkStrong};
+  border: 1px solid
+    ${({ theme, $primary }) =>
+      $primary ? theme.colors.primaryStrong : theme.colors.border};
+  background: ${({ theme, $primary }) =>
+    $primary ? theme.colors.primaryStrong : theme.colors.surface};
+  color: ${({ theme, $primary }) =>
+    $primary ? theme.colors.surface : theme.colors.inkStrong};
   text-decoration: none;
   font-weight: 600;
 
@@ -312,14 +327,23 @@ const ProvisionCopy = styled.p`
   line-height: 1.5;
 `
 
-const StatusRegion = styled.div`
-  min-height: 0;
+const PendingPanel = styled.div`
+  display: grid;
+  gap: ${({ theme }) => theme.spacing.sm};
+  padding: ${({ theme }) => theme.spacing.lg};
+  border: 1px solid ${({ theme }) => theme.colors.border};
+  border-radius: ${({ theme }) => theme.radii.lg};
+  background: ${({ theme }) => theme.colors.surface};
 `
 
-const StatusMessage = styled.p`
+const PendingTitle = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: ${({ theme }) => theme.spacing.sm};
+`
+
+const PendingCopy = styled.p`
   margin: 0;
-  padding: ${({ theme }) => `${theme.spacing.sm} ${theme.spacing.md}`};
-  border-radius: ${({ theme }) => theme.radii.md};
-  background: ${({ theme }) => theme.colors.accentSoft};
-  color: ${({ theme }) => theme.colors.inkStrong};
+  color: ${({ theme }) => theme.colors.ink};
+  line-height: 1.5;
 `

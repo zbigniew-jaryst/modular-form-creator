@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { Controller, useForm } from 'react-hook-form'
 import styled from 'styled-components'
 import { Button, CheckboxGroup, Input, Select } from '../../../design-system'
+import type { ProjectDetailsUpdatePayload } from '../model/resource.types'
 import {
   CATEGORY_OPTIONS,
   TEAM_MEMBER_OPTIONS,
@@ -22,9 +23,13 @@ import {
 
 type ProjectDetailsFormProps = {
   resource: Resource
+  initialValues?: ProjectDetailsUpdatePayload
   readOnly?: boolean
   isSubmitting?: boolean
+  submitLabel?: string
+  submittingLabel?: string
   submitError?: string
+  onDirtyChange?: (dirty: boolean) => void
   onSubmit?: (values: {
     projectName: string
     budget: string
@@ -33,15 +38,19 @@ type ProjectDetailsFormProps = {
   }) => Promise<void> | void
 }
 
-function toFormValues(resource: Resource): ProjectDetailsFormValues {
-  const category = resource.projectDetails.category
-  const options = resource.projectDetails.options.filter((option): option is TeamMemberOption =>
+function toFormValues(
+  resource: Resource,
+  initialValues?: ProjectDetailsUpdatePayload,
+): ProjectDetailsFormValues {
+  const category = initialValues?.category ?? resource.projectDetails.category
+  const rawOptions = initialValues?.options ?? resource.projectDetails.options
+  const options = rawOptions.filter((option): option is TeamMemberOption =>
     TEAM_MEMBER_OPTIONS.includes(option as TeamMemberOption),
   )
 
   return {
-    projectName: resource.projectDetails.projectName,
-    budget: resource.projectDetails.budget,
+    projectName: initialValues?.projectName ?? resource.projectDetails.projectName,
+    budget: initialValues?.budget ?? resource.projectDetails.budget,
     category:
       category === 'internal' || category === 'external' || category === 'vendor'
         ? category
@@ -52,26 +61,45 @@ function toFormValues(resource: Resource): ProjectDetailsFormValues {
 
 export function ProjectDetailsForm({
   resource,
+  initialValues,
   readOnly = false,
   isSubmitting = false,
+  submitLabel = 'Save Project Details',
+  submittingLabel = 'Saving…',
   submitError,
+  onDirtyChange,
   onSubmit,
 }: ProjectDetailsFormProps) {
+  const formValues = toFormValues(resource, initialValues)
+  const valuesKey = [
+    formValues.projectName,
+    formValues.budget,
+    formValues.category,
+    formValues.options.join(','),
+    resource.resourceId,
+  ].join('\u0000')
+
   const {
     register,
     control,
     handleSubmit,
     reset,
-    formState: { errors },
+    formState: { errors, isDirty },
     setFocus,
   } = useForm<ProjectDetailsFormValues>({
-    defaultValues: toFormValues(resource),
+    defaultValues: formValues,
     mode: 'onSubmit',
   })
 
   useEffect(() => {
-    reset(toFormValues(resource))
-  }, [resource, reset])
+    reset(toFormValues(resource, initialValues))
+    // valuesKey captures meaningful resource/initialValues field changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- avoid reset loops from new object identities
+  }, [valuesKey, reset])
+
+  useEffect(() => {
+    onDirtyChange?.(isDirty)
+  }, [isDirty, onDirtyChange])
 
   async function submit(values: ProjectDetailsFormValues) {
     if (!onSubmit) {
@@ -167,7 +195,7 @@ export function ProjectDetailsForm({
       {!readOnly ? (
         <Actions>
           <Button type="submit" disabled={isSubmitting}>
-            {isSubmitting ? 'Saving…' : 'Save Project Details'}
+            {isSubmitting ? submittingLabel : submitLabel}
           </Button>
         </Actions>
       ) : null}

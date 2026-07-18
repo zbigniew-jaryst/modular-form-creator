@@ -3,6 +3,8 @@ import styled from 'styled-components'
 import { Button, Drawer } from '../../../design-system'
 import { isApiError } from '../../../shared/api/ApiError'
 import { useDeleteResourceMutation } from '../api/resourcesQueries'
+import { useCompletedResourceDrafts } from '../completed-edits/CompletedResourceDraftsProvider'
+import { hasEffectivePendingChanges } from '../completed-edits/completedResourceDraft.helpers'
 import type { Resource } from '../model/resource.types'
 
 type DeleteResourceDrawerProps = {
@@ -20,6 +22,12 @@ export function DeleteResourceDrawer({
 }: DeleteResourceDrawerProps) {
   const [submitError, setSubmitError] = useState<string | undefined>()
   const deleteMutation = useDeleteResourceMutation()
+  const drafts = useCompletedResourceDrafts()
+  const resourceDraft = resource ? drafts.getDraft(resource.resourceId) : undefined
+  const hasPendingLocalChanges =
+    Boolean(resource) &&
+    resource!.status === 'completed' &&
+    hasEffectivePendingChanges(resource!, resourceDraft)
 
   async function handleDelete() {
     if (!resource) {
@@ -30,6 +38,7 @@ export function DeleteResourceDrawer({
 
     try {
       await deleteMutation.mutateAsync(resource.resourceId)
+      drafts.clearDraft(resource.resourceId)
       onDeleted(resource.name)
       onClose()
     } catch (error) {
@@ -48,6 +57,11 @@ export function DeleteResourceDrawer({
           Delete <strong>{resource?.name ?? 'this resource'}</strong>? This action cannot be
           undone.
         </Intro>
+        {hasPendingLocalChanges ? (
+          <Warning role="status">
+            This resource also has unsaved local changes that will be discarded.
+          </Warning>
+        ) : null}
         {submitError ? <ErrorText role="alert">{submitError}</ErrorText> : null}
         <Actions>
           <Button type="button" variant="ghost" onClick={onClose} disabled={deleteMutation.isPending}>
@@ -70,6 +84,12 @@ const Content = styled.div`
 const Intro = styled.p`
   margin: 0;
   color: ${({ theme }) => theme.colors.ink};
+  line-height: 1.5;
+`
+
+const Warning = styled.p`
+  margin: 0;
+  color: ${({ theme }) => theme.colors.inkMuted};
   line-height: 1.5;
 `
 

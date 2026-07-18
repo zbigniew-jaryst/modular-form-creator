@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { Controller, useForm } from 'react-hook-form'
 import styled from 'styled-components'
 import { Button, Input, Select } from '../../../design-system'
+import type { EditableCompletedBasicInfo } from '../completed-edits/completedResourceDraft.types'
 import { PRIORITY_OPTIONS } from '../model/resource.constants'
 import type { BasicInfoFormValues, Priority, Resource } from '../model/resource.types'
 import {
@@ -14,9 +15,13 @@ import {
 
 type BasicInfoFormProps = {
   resource: Resource
+  initialValues?: EditableCompletedBasicInfo
   readOnly?: boolean
   isSubmitting?: boolean
+  submitLabel?: string
+  submittingLabel?: string
   submitError?: string
+  onDirtyChange?: (dirty: boolean) => void
   onSubmit?: (values: {
     owner: string
     email: string
@@ -25,12 +30,19 @@ type BasicInfoFormProps = {
   }) => Promise<void> | void
 }
 
-function toFormValues(resource: Resource): BasicInfoFormValues {
-  const priority = resource.basicInfo.priority
+function toFormValues(
+  resource: Resource,
+  initialValues?: EditableCompletedBasicInfo,
+): BasicInfoFormValues {
+  const owner = initialValues?.owner ?? resource.basicInfo.owner
+  const email = initialValues?.email ?? resource.basicInfo.email
+  const description = initialValues?.description ?? resource.basicInfo.description
+  const priority = initialValues?.priority ?? resource.basicInfo.priority
+
   return {
-    owner: resource.basicInfo.owner,
-    email: resource.basicInfo.email,
-    description: resource.basicInfo.description,
+    owner,
+    email,
+    description,
     priority:
       priority === 'low' || priority === 'medium' || priority === 'high' ? priority : '',
   }
@@ -38,26 +50,46 @@ function toFormValues(resource: Resource): BasicInfoFormValues {
 
 export function BasicInfoForm({
   resource,
+  initialValues,
   readOnly = false,
   isSubmitting = false,
+  submitLabel = 'Save Basic Info',
+  submittingLabel = 'Saving…',
   submitError,
+  onDirtyChange,
   onSubmit,
 }: BasicInfoFormProps) {
+  const formValues = toFormValues(resource, initialValues)
+  const valuesKey = [
+    formValues.owner,
+    formValues.email,
+    formValues.description,
+    formValues.priority,
+    resource.name,
+    resource.resourceId,
+  ].join('\u0000')
+
   const {
     register,
     control,
     handleSubmit,
     reset,
-    formState: { errors },
+    formState: { errors, isDirty },
     setFocus,
   } = useForm<BasicInfoFormValues>({
-    defaultValues: toFormValues(resource),
+    defaultValues: formValues,
     mode: 'onSubmit',
   })
 
   useEffect(() => {
-    reset(toFormValues(resource))
-  }, [resource, reset])
+    reset(toFormValues(resource, initialValues))
+    // valuesKey captures meaningful resource/initialValues field changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- avoid reset loops from new object identities
+  }, [valuesKey, reset])
+
+  useEffect(() => {
+    onDirtyChange?.(isDirty)
+  }, [isDirty, onDirtyChange])
 
   async function submit(values: BasicInfoFormValues) {
     if (!onSubmit) {
@@ -157,7 +189,7 @@ export function BasicInfoForm({
       {!readOnly ? (
         <Actions>
           <Button type="submit" disabled={isSubmitting}>
-            {isSubmitting ? 'Saving…' : 'Save Basic Info'}
+            {isSubmitting ? submittingLabel : submitLabel}
           </Button>
         </Actions>
       ) : null}
