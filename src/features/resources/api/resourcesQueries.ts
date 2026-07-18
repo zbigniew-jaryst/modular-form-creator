@@ -12,6 +12,7 @@ import {
   deleteResource,
   getResource,
   listResources,
+  provisionResource,
   updateBasicInfo,
   updateProjectDetails,
 } from './resourcesApi'
@@ -75,6 +76,18 @@ export function useDeleteResourceMutation() {
   return useMutation({
     mutationFn: (resourceId: number) => deleteResource(resourceId),
     onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: resourceKeys.lists() })
+    },
+  })
+}
+
+export function useProvisionResourceMutation(identifier: ResourceIdentifier) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: () => provisionResource(identifier),
+    onSuccess: async (resource) => {
+      queryClient.setQueryData(resourceKeys.detail(identifier), resource)
       await queryClient.invalidateQueries({ queryKey: resourceKeys.lists() })
     },
   })

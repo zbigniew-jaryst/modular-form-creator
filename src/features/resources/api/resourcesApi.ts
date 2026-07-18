@@ -77,3 +77,9 @@ export function deleteResource(resourceId: number): Promise<Resource> {
     method: 'DELETE',
   })
 }
+
+export function provisionResource(identifier: ResourceIdentifier): Promise<Resource> {
+  return apiClient<Resource>(`${resourcePath(identifier)}/provisioning`, {
+    method: 'PATCH',
+  })
+}

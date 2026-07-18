@@ -99,7 +99,7 @@ describe('ResourceOverviewPage', () => {
 
     const reviewLinks = await screen.findAllByRole('link', { name: 'Review module' })
     expect(reviewLinks).toHaveLength(2)
-    expect(screen.queryByText(/provision/i)).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /provision/i })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Complete module' })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Edit module' })).not.toBeInTheDocument()
   })

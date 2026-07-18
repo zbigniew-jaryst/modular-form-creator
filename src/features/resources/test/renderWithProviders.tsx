@@ -6,6 +6,7 @@ import { ThemeProvider } from 'styled-components'
 import { theme } from '../../../design-system/theme/theme'
 import { BasicInfoPage } from '../pages/BasicInfoPage'
 import { ProjectDetailsPage } from '../pages/ProjectDetailsPage'
+import { ResourceDetailsPage } from '../pages/ResourceDetailsPage'
 import { ResourceOverviewPage } from '../pages/ResourceOverviewPage'
 import { ResourcesListPage } from '../pages/ResourcesListPage'
 
@@ -56,6 +57,7 @@ export function renderResourceApp(
     <Routes>
       <Route path="/resources" element={<ResourcesListPage />} />
       <Route path="/resources/:resourceId" element={<ResourceOverviewPage />} />
+      <Route path="/resources/:resourceId/details" element={<ResourceDetailsPage />} />
       <Route path="/resources/:resourceId/basic-info" element={<BasicInfoPage />} />
       <Route
         path="/resources/:resourceId/project-details"

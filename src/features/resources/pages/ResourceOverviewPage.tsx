@@ -1,8 +1,13 @@
-import { useLocation, useParams } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
+import { useState } from 'react'
+import { Link, useLocation, useParams } from 'react-router-dom'
 import styled from 'styled-components'
+import { Button } from '../../../design-system'
 import { isApiError } from '../../../shared/api/ApiError'
 import { paths } from '../../../shared/routing/paths'
+import { resourceKeys } from '../api/resourceKeys'
 import { useResourceQuery } from '../api/resourcesQueries'
+import { ProvisionResourceDrawer } from '../components/ProvisionResourceDrawer'
 import { ResourceHeader } from '../components/ResourceHeader'
 import { ResourceModuleCard } from '../components/ResourceModuleCard'
 import {
@@ -14,7 +19,12 @@ import {
   type ModuleSaveNotice,
 } from '../model/resourceNavigation'
 import { parseResourceIdentifier } from '../model/resourceIdentifier'
+import {
+  getProvisioningBlockedMessage,
+  getProvisioningEligibility,
+} from '../model/resourceProvisioning'
 import { getResourceProgress } from '../model/resourceProgress'
+import type { Resource } from '../model/resource.types'
 
 function summarizeBasicInfo(resource: {
   basicInfo: {
@@ -64,10 +74,14 @@ export function ResourceOverviewPage() {
   const { resourceId } = useParams()
   const identifier = parseResourceIdentifier(resourceId)
   const location = useLocation()
+  const queryClient = useQueryClient()
   const resourceQuery = useResourceQuery(identifier)
+  const [isProvisionOpen, setIsProvisionOpen] = useState(false)
+  const [statusMessage, setStatusMessage] = useState('')
 
   const notice = (location.state as { moduleSave?: ModuleSaveNotice } | null)?.moduleSave
-  const statusMessage = notice ? getModuleSaveSuccessMessage(notice.module) : ''
+  const moduleSaveMessage = notice ? getModuleSaveSuccessMessage(notice.module) : ''
+  const liveMessage = statusMessage || moduleSaveMessage
 
   if (!identifier) {
     return (
@@ -77,6 +91,8 @@ export function ResourceOverviewPage() {
       />
     )
   }
+
+  const resourceIdentifier = identifier
 
   if (resourceQuery.isPending && !resourceQuery.data) {
     return <ResourcePageLoading />
@@ -114,6 +130,7 @@ export function ResourceOverviewPage() {
 
   const progress = getResourceProgress(resource)
   const isCompleted = resource.status === 'completed'
+  const eligibility = getProvisioningEligibility(resource)
   const basicInfoActionLabel = isCompleted
     ? 'Review module'
     : progress.basicInfoComplete
@@ -127,13 +144,64 @@ export function ResourceOverviewPage() {
       ? 'Edit module'
       : 'Complete module'
 
+  function openProvisionDrawer() {
+    const latest = resourceQuery.data
+    if (!latest) {
+      return
+    }
+
+    const currentEligibility = getProvisioningEligibility(latest)
+    if (!currentEligibility.allowed) {
+      return
+    }
+
+    setStatusMessage('')
+    setIsProvisionOpen(true)
+  }
+
+  async function refetchResource(): Promise<Resource | undefined> {
+    const result = await resourceQuery.refetch()
+    return result.data
+  }
+
   return (
     <Page>
       <ResourceHeader resource={resource} />
 
+      <ActionsRow>
+        <DetailsLink to={paths.resourceDetails(resourceIdentifier)}>
+          View details
+        </DetailsLink>
+      </ActionsRow>
+
       <StatusRegion aria-live="polite">
-        {statusMessage ? <StatusMessage>{statusMessage}</StatusMessage> : null}
+        {liveMessage ? <StatusMessage>{liveMessage}</StatusMessage> : null}
       </StatusRegion>
+
+      {!isCompleted ? (
+        <ProvisionPanel>
+          {eligibility.allowed ? (
+            <>
+              <ProvisionCopy>
+                Both modules are complete. You can provision this resource to mark it as
+                completed.
+              </ProvisionCopy>
+              <Button type="button" onClick={openProvisionDrawer}>
+                Provision resource
+              </Button>
+            </>
+          ) : (
+            <>
+              <ProvisionCopy role="status">
+                {getProvisioningBlockedMessage(eligibility.reason)}
+              </ProvisionCopy>
+              <Button type="button" state="disabled">
+                Provision resource
+              </Button>
+            </>
+          )}
+        </ProvisionPanel>
+      ) : null}
 
       <Modules>
         <ResourceModuleCard
@@ -141,7 +209,7 @@ export function ResourceOverviewPage() {
           summary={summarizeBasicInfo(resource)}
           complete={progress.basicInfoComplete}
           actionLabel={basicInfoActionLabel}
-          actionTo={paths.resourceBasicInfo(identifier)}
+          actionTo={paths.resourceBasicInfo(resourceIdentifier)}
         />
         <ResourceModuleCard
           title="Project Details"
@@ -151,7 +219,7 @@ export function ResourceOverviewPage() {
           actionTo={
             projectDetailsLocked
               ? undefined
-              : paths.resourceProjectDetails(identifier)
+              : paths.resourceProjectDetails(resourceIdentifier)
           }
           lockedReason={
             projectDetailsLocked
@@ -160,6 +228,32 @@ export function ResourceOverviewPage() {
           }
         />
       </Modules>
+
+      {isProvisionOpen ? (
+        <ProvisionResourceDrawer
+          resource={resource}
+          identifier={resourceIdentifier}
+          isOpen={isProvisionOpen}
+          onClose={() => {
+            setIsProvisionOpen(false)
+          }}
+          onProvisioned={() => {
+            setStatusMessage('Resource provisioned successfully. Status is now completed.')
+          }}
+          onStatusChangedExternally={() => {
+            setStatusMessage(
+              'This resource was already completed before the action finished. The page now shows the current status.',
+            )
+          }}
+          onResourceMissing={() => {
+            queryClient.removeQueries({
+              queryKey: resourceKeys.detail(resourceIdentifier),
+            })
+          }}
+          getLatestResource={() => resourceQuery.data}
+          refetchResource={refetchResource}
+        />
+      ) : null}
     </Page>
   )
 }
@@ -169,6 +263,30 @@ const Page = styled.section`
   gap: ${({ theme }) => theme.spacing.xl};
 `
 
+const ActionsRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: ${({ theme }) => theme.spacing.sm};
+`
+
+const DetailsLink = styled(Link)`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: ${({ theme }) => `${theme.spacing.sm} ${theme.spacing.md}`};
+  border-radius: ${({ theme }) => theme.radii.pill};
+  border: 1px solid ${({ theme }) => theme.colors.border};
+  background: ${({ theme }) => theme.colors.surface};
+  color: ${({ theme }) => theme.colors.inkStrong};
+  text-decoration: none;
+  font-weight: 600;
+
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.primaryStrong};
+    outline-offset: 2px;
+  }
+`
+
 const Modules = styled.div`
   display: grid;
   gap: ${({ theme }) => theme.spacing.md};
@@ -176,6 +294,22 @@ const Modules = styled.div`
   @media (min-width: 768px) {
     grid-template-columns: 1fr 1fr;
   }
+`
+
+const ProvisionPanel = styled.div`
+  display: grid;
+  gap: ${({ theme }) => theme.spacing.md};
+  justify-items: start;
+  padding: ${({ theme }) => theme.spacing.lg};
+  border: 1px solid ${({ theme }) => theme.colors.border};
+  border-radius: ${({ theme }) => theme.radii.lg};
+  background: ${({ theme }) => theme.colors.surface};
+`
+
+const ProvisionCopy = styled.p`
+  margin: 0;
+  color: ${({ theme }) => theme.colors.ink};
+  line-height: 1.5;
 `
 
 const StatusRegion = styled.div`
