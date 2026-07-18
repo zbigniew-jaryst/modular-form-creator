@@ -1,9 +1,13 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render } from '@testing-library/react'
 import type { ReactElement, ReactNode } from 'react'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { ThemeProvider } from 'styled-components'
 import { theme } from '../../../design-system/theme/theme'
+import { BasicInfoPage } from '../pages/BasicInfoPage'
+import { ProjectDetailsPage } from '../pages/ProjectDetailsPage'
+import { ResourceOverviewPage } from '../pages/ResourceOverviewPage'
+import { ResourcesListPage } from '../pages/ResourcesListPage'
 
 export function createTestQueryClient(): QueryClient {
   return new QueryClient({
@@ -42,4 +46,22 @@ export function renderWithProviders(
     queryClient,
     ...render(ui, { wrapper: Wrapper }),
   }
+}
+
+export function renderResourceApp(
+  route: string,
+  queryClient: QueryClient = createTestQueryClient(),
+) {
+  return renderWithProviders(
+    <Routes>
+      <Route path="/resources" element={<ResourcesListPage />} />
+      <Route path="/resources/:resourceId" element={<ResourceOverviewPage />} />
+      <Route path="/resources/:resourceId/basic-info" element={<BasicInfoPage />} />
+      <Route
+        path="/resources/:resourceId/project-details"
+        element={<ProjectDetailsPage />}
+      />
+    </Routes>,
+    { route, queryClient },
+  )
 }

@@ -1,5 +1,7 @@
+import { Link } from 'react-router-dom'
 import styled from 'styled-components'
 import { Button, Card } from '../../../design-system'
+import { paths } from '../../../shared/routing/paths'
 import type { Resource } from '../model/resource.types'
 import { ResourceProgress } from './ResourceProgress'
 import { ResourceStatusBadge } from './ResourceStatusBadge'
@@ -39,14 +41,17 @@ export function ResourceListItem({ resource, onDelete }: ResourceListItemProps) 
               <ResourceStatusBadge status={resource.status} />
             </MetaRow>
           </TitleGroup>
-          <Button
-            type="button"
-            variant="ghost"
-            size="small"
-            onClick={() => onDelete(resource)}
-          >
-            Delete
-          </Button>
+          <ItemActions>
+            <ViewLink to={paths.resource(resource.resourceId)}>View resource</ViewLink>
+            <Button
+              type="button"
+              variant="ghost"
+              size="small"
+              onClick={() => onDelete(resource)}
+            >
+              Delete
+            </Button>
+          </ItemActions>
         </ItemHeader>
         <ItemFooter>
           <ResourceProgress resource={resource} />
@@ -67,6 +72,31 @@ const ItemHeader = styled.div`
   align-items: flex-start;
   justify-content: space-between;
   gap: ${({ theme }) => theme.spacing.md};
+`
+
+const ItemActions = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: ${({ theme }) => theme.spacing.sm};
+`
+
+const ViewLink = styled(Link)`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: ${({ theme }) => `${theme.spacing.xs} ${theme.spacing.md}`};
+  border-radius: ${({ theme }) => theme.radii.pill};
+  background: ${({ theme }) => theme.colors.primary};
+  color: ${({ theme }) => theme.colors.surface};
+  text-decoration: none;
+  font-size: 0.9rem;
+  font-weight: 600;
+
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.primaryStrong};
+    outline-offset: 2px;
+  }
 `
 
 const TitleGroup = styled.div`
