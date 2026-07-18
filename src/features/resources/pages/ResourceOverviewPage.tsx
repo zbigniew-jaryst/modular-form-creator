@@ -199,10 +199,14 @@ export function ResourceOverviewPage() {
             </>
           ) : (
             <>
-              <ProvisionCopy role="status">
+              <ProvisionCopy id="provision-blocked-reason" role="status">
                 {getProvisioningBlockedMessage(eligibility.reason)}
               </ProvisionCopy>
-              <Button type="button" state="disabled">
+              <Button
+                type="button"
+                state="disabled"
+                aria-describedby="provision-blocked-reason"
+              >
                 Provision resource
               </Button>
             </>
