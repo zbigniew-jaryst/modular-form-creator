@@ -1,28 +1,44 @@
-import { Navigate, Route, Routes } from 'react-router-dom'
-import { BasicInfoPage } from '../../features/resources/pages/BasicInfoPage'
-import { ProjectDetailsPage } from '../../features/resources/pages/ProjectDetailsPage'
-import { ResourceDetailsPage } from '../../features/resources/pages/ResourceDetailsPage'
-import { ResourceOverviewPage } from '../../features/resources/pages/ResourceOverviewPage'
-import { ResourcesListPage } from '../../features/resources/pages/ResourcesListPage'
-import { NotFoundPage } from '../../shared/pages/NotFoundPage'
-import { paths } from '../../shared/routing/paths'
+import {
+  createBrowserRouter,
+  Navigate,
+  Outlet,
+  RouterProvider,
+} from 'react-router-dom'
+import { BasicInfoPage } from '../../features/resources/routes/basic-info/BasicInfoPage'
+import { ProjectDetailsPage } from '../../features/resources/routes/project-details/ProjectDetailsPage'
+import { ResourceDetailsPage } from '../../features/resources/routes/resource-details/ResourceDetailsPage'
+import { ResourceOverviewPage } from '../../features/resources/routes/resource-overview/ResourceOverviewPage'
+import { ResourcesListPage } from '../../features/resources/routes/resources-list/ResourcesListPage'
+import { NotFoundPage } from '../pages/NotFoundPage'
+import { pathPatterns, paths } from '../../shared/routing/paths'
 import { AppShell } from '../layout/AppShell'
 
-export function AppRouter() {
+function AppLayout() {
   return (
     <AppShell>
-      <Routes>
-        <Route path={paths.home} element={<Navigate to={paths.resources} replace />} />
-        <Route path={paths.resources} element={<ResourcesListPage />} />
-        <Route path="/resources/:resourceId" element={<ResourceOverviewPage />} />
-        <Route path="/resources/:resourceId/details" element={<ResourceDetailsPage />} />
-        <Route path="/resources/:resourceId/basic-info" element={<BasicInfoPage />} />
-        <Route
-          path="/resources/:resourceId/project-details"
-          element={<ProjectDetailsPage />}
-        />
-        <Route path="*" element={<NotFoundPage />} />
-      </Routes>
+      <Outlet />
     </AppShell>
   )
+}
+
+const appRouter = createBrowserRouter([
+  {
+    element: <AppLayout />,
+    children: [
+      { path: paths.home, element: <Navigate to={paths.resources} replace /> },
+      { path: paths.resources, element: <ResourcesListPage /> },
+      { path: pathPatterns.resource, element: <ResourceOverviewPage /> },
+      { path: pathPatterns.resourceDetails, element: <ResourceDetailsPage /> },
+      { path: pathPatterns.resourceBasicInfo, element: <BasicInfoPage /> },
+      {
+        path: pathPatterns.resourceProjectDetails,
+        element: <ProjectDetailsPage />,
+      },
+      { path: '*', element: <NotFoundPage /> },
+    ],
+  },
+])
+
+export function AppRouter() {
+  return <RouterProvider router={appRouter} />
 }

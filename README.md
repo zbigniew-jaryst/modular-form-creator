@@ -56,11 +56,16 @@ Changing `VITE_API_URL` for Docker requires rebuilding the frontend image (`dock
 |--------|---------|
 | `npm run dev` | Vite development server |
 | `npm run build` | Typecheck + production build |
+| `npm run typecheck` | TypeScript project references check only |
 | `npm run lint` | ESLint |
+| `npm run format` | Prettier write across the repo |
+| `npm run preview` | Preview the production build locally |
 | `npm run test` | Vitest unit/integration tests (no MongoDB required) |
-| `npm run build-storybook` | Build Storybook static site |
+| `npm run test:watch` | Vitest watch mode |
 | `npm run test:e2e` | Playwright E2E against a real backend |
 | `npm run test:e2e:headed` | Playwright headed mode |
+| `npm run storybook` | Design-system Storybook dev server |
+| `npm run build-storybook` | Build Storybook static site |
 
 ## Required routes
 
@@ -77,8 +82,8 @@ Direct refresh of every route is supported (SPA fallback in the production Nginx
 - **Fetch API** boundary in `src/shared/api` and feature API modules
 - **TanStack Query** for server state, cache, and mutations
 - **React Hook Form** for module forms and validation
-- **URL-owned** resource list filters, sort, and pagination
-- Pure **domain selectors** for progress, provisioning eligibility, and display helpers
+- **URL-owned** resource list filters, sort, and page (`pageSize` fixed at 10)
+- Pure **domain selectors** for progress and provisioning eligibility; presentation helpers for labels/formatting
 - **In-memory completed-resource buffer** stores module overrides (not a full cloned Resource), so server fields stay authoritative and PUT payloads stay complete
 - Full **PUT** is only available from Details after explicit confirmation
 - Buffer data disappears on reload by design (session-only)
@@ -113,5 +118,5 @@ Optional: set `E2E_REUSE_SERVER=1` to reuse an already-running Vite server. By d
 ## Reviewer notes
 
 - Backend API documentation: [backend/README.md](backend/README.md)
+- Frontend architecture: [docs/FRONTEND_ARCHITECTURE.md](docs/FRONTEND_ARCHITECTURE.md)
 - Design-system source under `src/design-system` is treated as given for this assignment
-- Suggested commit message for this delivery phase: `chore: add E2E coverage, Docker workflow, and project documentation`

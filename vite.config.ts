@@ -9,7 +9,6 @@ import { playwright } from '@vitest/browser-playwright'
 const dirname =
   typeof __dirname !== 'undefined' ? __dirname : path.dirname(fileURLToPath(import.meta.url))
 
-// More info at: https://storybook.js.org/docs/next/writing-tests/integrations/vitest-addon
 export default defineConfig({
   plugins: [react()],
   test: {
@@ -40,7 +39,7 @@ export default defineConfig({
         test: {
           name: 'unit',
           environment: 'jsdom',
-          setupFiles: ['./src/shared/test/setup.ts'],
+          setupFiles: ['./src/test/setup.ts'],
           include: ['src/**/*.{test,spec}.{ts,tsx}'],
           exclude: ['src/**/*.stories.{ts,tsx}', 'node_modules', 'dist'],
         },
